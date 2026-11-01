@@ -1,0 +1,39 @@
+name: ci
+on: [push, pull_request]
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: unit + HTTPS tests (standard library only)
+        run: python3 -m unittest discover -s tests -t . -v
+      - name: webhook config guard (blocks the outage config)
+        run: |
+          pip install pyyaml
+          (cd tools && python3 -m unittest -v)
+          python3 tools/check_webhook_config.py deploy/fixed
+
+  drill:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+        with: { install_only: true }
+      - name: fixed config survives a node drain
+        run: |
+          ./drill/run-drill.sh fixed
+          grep -q "CoreDNS restarted: OK" drill/results-fixed.txt
+          grep -qi "denied" drill/results-fixed.txt
+
+  scan:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: docker build -t admission-guard:ci .
+      - uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
+        with: { image-ref: "admission-guard:ci", severity: "HIGH,CRITICAL", ignore-unfixed: true, exit-code: "1" }

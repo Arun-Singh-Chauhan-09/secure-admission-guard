@@ -1,0 +1,150 @@
+# THE OUTAGE CONFIG. Drill only: ./drill/run-drill.sh broken
+# Differences from deploy/fixed: 1 replica, no PDB, no anti-affinity, no namespaceSelector, 10 s timeout.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: admission-guard
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admission-guard
+  namespace: admission-guard
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admission-guard
+  namespace: admission-guard
+  labels:
+    app.kubernetes.io/name: admission-guard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: admission-guard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: admission-guard
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '8080'
+    spec:
+      serviceAccountName: admission-guard
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: guard
+        image: admission-guard:dev
+        imagePullPolicy: IfNotPresent
+        args:
+        - --allowed-registries=registry.internal/
+        - --require-digest=true
+        - --enforce=true
+        ports:
+        - name: https
+          containerPort: 8443
+        - name: metrics
+          containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+        resources:
+          requests:
+            cpu: 50m
+            memory: 32Mi
+          limits:
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: certs
+          mountPath: /certs
+          readOnly: true
+      volumes:
+      - name: certs
+        secret:
+          secretName: admission-guard-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admission-guard
+  namespace: admission-guard
+spec:
+  selector:
+    app.kubernetes.io/name: admission-guard
+  ports:
+  - name: https
+    port: 443
+    targetPort: https
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned
+  namespace: admission-guard
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: admission-guard
+  namespace: admission-guard
+spec:
+  secretName: admission-guard-tls
+  duration: 720h
+  renewBefore: 240h
+  dnsNames:
+  - admission-guard.admission-guard.svc
+  issuerRef:
+    name: selfsigned
+    kind: Issuer
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: admission-guard
+  annotations:
+    cert-manager.io/inject-ca-from: admission-guard/admission-guard
+webhooks:
+- name: pods.admission-guard.io
+  admissionReviewVersions:
+  - v1
+  sideEffects: None
+  failurePolicy: Fail
+  timeoutSeconds: 10
+  rules:
+  - apiGroups:
+    - ''
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - pods
+    scope: Namespaced
+  clientConfig:
+    service:
+      name: admission-guard
+      namespace: admission-guard
+      path: /validate
