@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# The guard on a small platform: Terraform installs Prometheus, Alertmanager, Grafana,
+# The guard on a small platform: Terraform installs Prometheus, Alertmanager, Grafana, Loki,
 # cert-manager and Argo CD on kind; Argo CD deploys the guard and its alerts from Git.
 # Then it checks, end to end, that the pieces work together:
 #   1. the guard denies a bad pod            4. Argo CD undoes a manual change (GitOps)
 #   2. Prometheus scrapes both replicas      5. guard down -> AdmissionGuardDown reaches Alertmanager
-#   3. the SLO rules and dashboard loaded    6. GitOps restores the guard, alert resolves
+#   3. SLO rules, dashboard, and Loki logs   6. GitOps restores the guard, alert resolves
 #
 #   ./platform/up.sh          (about 10 minutes; needs docker, kind, kubectl; ~4 GB RAM)
 #   ./platform/down.sh
@@ -70,6 +70,13 @@ done
 log "alert rules loaded: AdmissionGuardDown, Degraded, ErrorBudgetBurnFast/Slow, Slow, CertExpiringSoon"
 $K -n monitoring get configmap admission-guard-dashboard >/dev/null || fail "dashboard ConfigMap missing"
 log "Grafana dashboard ConfigMap: present (sidecar loads it as 'Admission Guard')"
+
+log "== 3b. Loki has the guard's decision logs (shipped by Alloy)"
+loki_hits() { $K get --raw "/api/v1/namespaces/monitoring/services/loki-gateway:80/proxy/loki/api/v1/query_range?query=$(python3 -c 'import urllib.parse;print(urllib.parse.quote("{namespace=\"admission-guard\"} |= \"policy_violation\""))')&limit=5" \
+  | python3 -c 'import sys,json;print(sum(len(s["values"]) for s in json.load(sys.stdin)["data"]["result"]))'; }
+has_logs() { [ "$(loki_hits)" -gt 0 ]; }
+wait_for "policy_violation log lines in Loki" 240 has_logs
+log "Loki: $(loki_hits) policy_violation line(s) for the denied pod, queryable in Grafana"
 
 # ---- 4. GitOps self-heal -------------------------------------------------------------
 log "== 4. someone scales the guard to 1 by hand; Argo CD puts it back"

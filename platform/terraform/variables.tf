@@ -29,6 +29,8 @@ variable "chart_versions" {
     cert_manager          = string
     argo_cd               = string
     argocd_apps           = string
+    loki                  = string
+    alloy                 = string
   })
 
   default = {
@@ -36,5 +38,7 @@ variable "chart_versions" {
     cert_manager          = "~1.16.0"
     argo_cd               = "~7.6.0"
     argocd_apps           = "~2.0.0"
+    loki                  = "~6.16.0"
+    alloy                 = "~0.9.0"
   }
 }

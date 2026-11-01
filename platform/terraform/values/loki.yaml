@@ -1,0 +1,32 @@
+# Single-binary Loki on the local filesystem: right for a demo cluster. In production:
+# simple-scalable or distributed mode, object storage (S3-compatible / on-prem MinIO),
+# and retention set by the security team's log policy.
+deploymentMode: SingleBinary
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  limits_config:
+    retention_period: 48h
+singleBinary:
+  replicas: 1
+  persistence:
+    size: 5Gi
+read: { replicas: 0 }
+write: { replicas: 0 }
+backend: { replicas: 0 }
+chunksCache: { enabled: false }
+resultsCache: { enabled: false }
+lokiCanary: { enabled: false }
+test: { enabled: false }

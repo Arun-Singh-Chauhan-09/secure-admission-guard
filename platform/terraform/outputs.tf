@@ -4,6 +4,7 @@ output "next_steps" {
                   user admin, password: kubectl --context ${var.kube_context} -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
     Grafana:      kubectl --context ${var.kube_context} -n monitoring port-forward svc/kps-grafana 3000:80   (admin / see values file)
     Prometheus:   kubectl --context ${var.kube_context} -n monitoring port-forward svc/kps-prometheus 9090:9090
+    Loki:         Grafana -> Explore -> Loki:  {namespace="admission-guard"} |= "policy_violation"
     Alertmanager: kubectl --context ${var.kube_context} -n monitoring port-forward svc/kps-alertmanager 9093:9093
   EOT
 }

@@ -52,9 +52,10 @@
 
 10. **"How do you know it's healthy, and who gets woken up?"** SLI is the share of API server → webhook calls that got an answer; a denial counts as success, because that's the guard working. SLO 99.9 %. Burn-rate alerts on two windows: 14.4× pages, 6× opens a ticket. Plus `AdmissionGuardDown`, measured as "no replica scraped", since a dead guard can't report its own errors; the API server's `apiserver_admission_webhook_rejection_count{error_type="calling_webhook_error"}` is the outside view. Alertmanager routes critical to on-call and inhibits the matching warning. Every alert links to a runbook.
 11. **"Why Terraform *and* Argo CD?"** Terraform installs the platform once (charts, versions, values). Argo CD deploys what changes often (the guard, its alerts, its dashboard) from Git, and self-heals drift. One gotcha I hit in design: cert-manager writes the CA into the webhook config, so Argo CD must ignore that field, or it would keep removing it and break every webhook call.
+12. **"Metrics or logs for this?"** Both, for different questions. Metrics (Prometheus) answer *is it healthy and how fast is the budget burning*: cheap, aggregated, drive alerts. Logs (Loki) answer *who and what*: which namespace, which pod, which rule. The guard logs one JSON line per violation; LogQL `| json` turns it into labels at query time, so I can chart denials by team without adding high-cardinality labels to Prometheus. Alloy (Promtail's successor) ships the logs via the Kubernetes API.
 
 ## Honest gaps to name
-Service mesh in production, Falco, distributed tracing (Tempo/OpenTelemetry), and MLOps platforms (Kubeflow/MLflow). Also ask: "Defence work may need security vetting. What's the process for someone who isn't an EU citizen?"
+Service mesh in production, Falco, distributed tracing (Tempo/OpenTelemetry; Loki is done), and MLOps platforms (Kubeflow/MLflow). Also ask: "Defence work may need security vetting. What's the process for someone who isn't an EU citizen?"
 
 ## Before the interview
 - [ ] `python3 -m unittest discover -s tests -t . -v`, then explain `evaluate`, `review`, `TLSServer.finish_request` and the `urlsplit` fix without notes

@@ -60,4 +60,12 @@ data:
     \n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 12,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"d\"\
     \n        },\n        \"overrides\": []\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\"\
     : \"prometheus\"\n          },\n          \"expr\": \"(certmanager_certificate_expiration_timestamp_seconds{namespace=\\\"admission-guard\\\"} - time()) / 86400\",\n          \"legendFormat\": \"{{name}}\"\
-    \n        }\n      ]\n    }\n  ]\n}"
+    \n        }\n      ]\n    },\n    {\n      \"id\": 9,\n      \"type\": \"timeseries\",\n      \"title\": \"Denials by namespace (from logs)\",\n      \"datasource\": {\n        \"type\": \"loki\",\n\
+    \        \"uid\": \"loki\"\n      },\n      \"description\": \"Which teams are hitting the policy: the place to start the conversation before enforcing.\",\n      \"gridPos\": {\n        \"x\": 0,\n\
+    \        \"y\": 20,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\"\n        },\n        \"overrides\": []\n      },\n\
+    \      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"loki\",\n            \"uid\": \"loki\"\n          },\n          \"legendFormat\":\
+    \ \"{{target_ns}}\",\n          \"expr\": \"sum by (target_ns) (count_over_time({namespace=\\\"admission-guard\\\"} |= \\\"policy_violation\\\" | json target_ns=\\\"namespace\\\" [5m]))\"\n        }\n\
+    \      ]\n    },\n    {\n      \"id\": 10,\n      \"type\": \"logs\",\n      \"title\": \"Policy violations (newest first)\",\n      \"datasource\": {\n        \"type\": \"loki\",\n        \"uid\":\
+    \ \"loki\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 20,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"options\": {\n        \"showTime\": true,\n        \"wrapLogMessage\"\
+    : true,\n        \"sortOrder\": \"Descending\"\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"loki\",\n            \"uid\"\
+    : \"loki\"\n          },\n          \"expr\": \"{namespace=\\\"admission-guard\\\"} |= \\\"policy_violation\\\"\"\n        }\n      ]\n    }\n  ]\n}"

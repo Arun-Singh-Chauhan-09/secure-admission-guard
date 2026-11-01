@@ -1,4 +1,4 @@
-# The platform under the guard: monitoring, certificates, and GitOps.
+# The platform under the guard: metrics, logs, certificates, and GitOps.
 # Terraform installs the platform once; from then on Argo CD deploys the guard and its
 # alerts/dashboards from Git, so a change goes through a commit, not kubectl.
 #
@@ -14,6 +14,34 @@ resource "helm_release" "kube_prometheus_stack" {
   create_namespace = true
   timeout          = 900
   values           = [file("${path.module}/values/kube-prometheus-stack.yaml")]
+}
+
+# Logs: Loki stores them, Alloy ships every pod's logs to it (read through the Kubernetes
+# API, so no hostPath mounts). The guard logs one JSON line per policy violation.
+resource "helm_release" "loki" {
+  name             = "loki"
+  repository       = "https://grafana.github.io/helm-charts"
+  chart            = "loki"
+  version          = var.chart_versions.loki
+  namespace        = "monitoring"
+  create_namespace = true
+  timeout          = 600
+  values           = [file("${path.module}/values/loki.yaml")]
+
+  depends_on = [helm_release.kube_prometheus_stack] # same namespace; one at a time
+}
+
+resource "helm_release" "alloy" {
+  name       = "alloy"
+  repository = "https://grafana.github.io/helm-charts"
+  chart      = "alloy"
+  version    = var.chart_versions.alloy
+  namespace  = "monitoring"
+  timeout    = 300
+
+  values = [file("${path.module}/values/alloy.yaml")]
+
+  depends_on = [helm_release.loki]
 }
 
 resource "helm_release" "cert_manager" {
@@ -67,5 +95,6 @@ resource "helm_release" "argocd_apps" {
     helm_release.argo_cd,
     helm_release.cert_manager,
     helm_release.kube_prometheus_stack,
+    helm_release.alloy,
   ]
 }
