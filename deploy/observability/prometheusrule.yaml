@@ -1,0 +1,99 @@
+# SLO and alerts for the admission guard. Runbook: docs/runbook.md
+#
+# SLI: share of API server -> webhook calls that got an answer (allowed OR denied).
+#      A denial is the guard working; a failed call is the guard failing.
+# SLO: 99.9 % over 30 days  ->  error budget 0.1 %.
+# Burn-rate alerts (Google SRE workbook): page when the budget would be gone in ~2 days,
+# ticket when it would be gone in ~5 days. Two windows each, so a short blip doesn't page
+# and a fixed problem stops paging quickly.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: admission-guard
+  namespace: monitoring
+spec:
+  groups:
+    - name: admission-guard.sli
+      interval: 30s
+      rules:
+        - record: admission_guard:webhook_call_errors:ratio_rate5m
+          expr: |
+            sum(rate(apiserver_admission_webhook_rejection_count{name="pods.admission-guard.io",error_type="calling_webhook_error"}[5m]))
+            /
+            clamp_min(sum(rate(apiserver_admission_webhook_request_total{name="pods.admission-guard.io"}[5m])), 1e-9)
+        - record: admission_guard:webhook_call_errors:ratio_rate30m
+          expr: |
+            sum(rate(apiserver_admission_webhook_rejection_count{name="pods.admission-guard.io",error_type="calling_webhook_error"}[30m]))
+            /
+            clamp_min(sum(rate(apiserver_admission_webhook_request_total{name="pods.admission-guard.io"}[30m])), 1e-9)
+        - record: admission_guard:webhook_call_errors:ratio_rate1h
+          expr: |
+            sum(rate(apiserver_admission_webhook_rejection_count{name="pods.admission-guard.io",error_type="calling_webhook_error"}[1h]))
+            /
+            clamp_min(sum(rate(apiserver_admission_webhook_request_total{name="pods.admission-guard.io"}[1h])), 1e-9)
+        - record: admission_guard:webhook_call_errors:ratio_rate6h
+          expr: |
+            sum(rate(apiserver_admission_webhook_rejection_count{name="pods.admission-guard.io",error_type="calling_webhook_error"}[6h]))
+            /
+            clamp_min(sum(rate(apiserver_admission_webhook_request_total{name="pods.admission-guard.io"}[6h])), 1e-9)
+        - record: admission_guard:latency_seconds:avg_rate5m
+          expr: |
+            sum(rate(admission_guard_seconds_total[5m]))
+            /
+            clamp_min(sum(rate(admission_guard_decisions_total{result!="error"}[5m])), 1e-9)
+
+    - name: admission-guard.alerts
+      rules:
+        - alert: AdmissionGuardDown
+          # "or vector(0)" covers the case where no guard pod exists at all, so no up series.
+          expr: (sum(up{namespace="admission-guard"}) or vector(0)) == 0
+          for: 1m
+          labels: { severity: critical }
+          annotations:
+            summary: No admission-guard replica is up.
+            description: failurePolicy is Fail, so every pod create outside the exempt namespaces is being rejected.
+            runbook_url: https://github.com/Arun-Singh-Chauhan-09/secure-admission-guard/blob/main/docs/runbook.md#admissionguarddown
+
+        - alert: AdmissionGuardDegraded
+          expr: sum(up{namespace="admission-guard"}) < 2
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: Only {{ $value }} admission-guard replica(s) up; one more failure is an outage.
+            runbook_url: https://github.com/Arun-Singh-Chauhan-09/secure-admission-guard/blob/main/docs/runbook.md#admissionguarddegraded
+
+        - alert: AdmissionGuardErrorBudgetBurnFast
+          expr: |
+            admission_guard:webhook_call_errors:ratio_rate1h > (14.4 * 0.001)
+            and
+            admission_guard:webhook_call_errors:ratio_rate5m > (14.4 * 0.001)
+          labels: { severity: critical }
+          annotations:
+            summary: Webhook calls failing fast enough to burn the 30-day error budget in ~2 days.
+            runbook_url: https://github.com/Arun-Singh-Chauhan-09/secure-admission-guard/blob/main/docs/runbook.md#errorbudgetburn
+
+        - alert: AdmissionGuardErrorBudgetBurnSlow
+          expr: |
+            admission_guard:webhook_call_errors:ratio_rate6h > (6 * 0.001)
+            and
+            admission_guard:webhook_call_errors:ratio_rate30m > (6 * 0.001)
+          labels: { severity: warning }
+          annotations:
+            summary: Webhook calls failing fast enough to burn the 30-day error budget in ~5 days.
+            runbook_url: https://github.com/Arun-Singh-Chauhan-09/secure-admission-guard/blob/main/docs/runbook.md#errorbudgetburn
+
+        - alert: AdmissionGuardSlow
+          expr: admission_guard:latency_seconds:avg_rate5m > 0.1
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: Average decision time above 100 ms (API server timeout is 3 s).
+            runbook_url: https://github.com/Arun-Singh-Chauhan-09/secure-admission-guard/blob/main/docs/runbook.md#admissionguardslow
+
+        - alert: AdmissionGuardCertExpiringSoon
+          expr: (certmanager_certificate_expiration_timestamp_seconds{namespace="admission-guard"} - time()) < 7 * 24 * 3600
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: The webhook's serving certificate expires in under 7 days; cert-manager should have renewed it 10 days before expiry.
+            runbook_url: https://github.com/Arun-Singh-Chauhan-09/secure-admission-guard/blob/main/docs/runbook.md#admissionguardcertexpiringsoon

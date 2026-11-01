@@ -1,0 +1,7 @@
+== [fixed] policy works: unpinned public image is denied
+Error from server: admission webhook "pods.admission-guard.io" denied the request: admission-guard: 4 violation(s): container "bad": image "nginx:latest" is not from an allowed registry ['registry.internal/']; container "bad": image "nginx:latest" must be pinned by digest (@sha256:...); container "bad": set allowPrivilegeEscalation: false; container "bad": must run as non-root (runAsNonRoot: true)
+== [fixed] drain the node running a guard replica (routine OS patching)
+guard pods running: 2
+guard ReplicaSet events:
+== [fixed] can kube-system still create pods? (restart CoreDNS)
+CoreDNS restarted: OK

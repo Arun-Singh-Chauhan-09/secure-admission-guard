@@ -1,0 +1,33 @@
+applications:
+  admission-guard:
+    namespace: argocd
+    project: default
+    source:
+      repoURL: ${repo_url}
+      targetRevision: ${target_revision}
+      path: platform/gitops/guard
+    destination:
+      server: https://kubernetes.default.svc
+      namespace: admission-guard
+    syncPolicy:
+      automated: { prune: true, selfHeal: true }
+      syncOptions: [RespectIgnoreDifferences=true]
+    # cert-manager injects the CA into the webhook config. Without this, Argo CD would
+    # see a diff and keep removing it, which would break every webhook call.
+    ignoreDifferences:
+      - group: admissionregistration.k8s.io
+        kind: ValidatingWebhookConfiguration
+        jqPathExpressions: [".webhooks[]?.clientConfig.caBundle"]
+
+  admission-guard-observability:
+    namespace: argocd
+    project: default
+    source:
+      repoURL: ${repo_url}
+      targetRevision: ${target_revision}
+      path: deploy/observability
+    destination:
+      server: https://kubernetes.default.svc
+      namespace: monitoring
+    syncPolicy:
+      automated: { prune: true, selfHeal: true }

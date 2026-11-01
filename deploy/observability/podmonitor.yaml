@@ -1,0 +1,14 @@
+# Prometheus scrapes each guard pod on :8080/metrics. The guard's NetworkPolicy allows
+# 8080 only from the monitoring namespace, which is where Prometheus runs.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: admission-guard
+  namespace: admission-guard
+spec:
+  selector:
+    matchLabels: { app.kubernetes.io/name: admission-guard }
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

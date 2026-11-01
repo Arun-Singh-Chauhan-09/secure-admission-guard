@@ -1,0 +1,7 @@
+configs:
+  params:
+    server.insecure: true   # local demo: reached with kubectl port-forward only
+dex:
+  enabled: false
+notifications:
+  enabled: false

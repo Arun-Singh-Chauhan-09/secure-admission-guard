@@ -50,8 +50,11 @@
 
 9. **"Is your own image secure?"** I reviewed it like a security team would. My base image was pinned by tag while my webhook demands digests, so I pinned it by digest, made CI fail on an unpinned `FROM`, and added Dependabot so the pin gets updated. I also added a default-deny NetworkPolicy (8443 open because the API server isn't a pod; 8080 only from monitoring; no egress) and a PriorityClass so the guard isn't evicted before the apps it protects.
 
+10. **"How do you know it's healthy, and who gets woken up?"** SLI is the share of API server → webhook calls that got an answer; a denial counts as success, because that's the guard working. SLO 99.9 %. Burn-rate alerts on two windows: 14.4× pages, 6× opens a ticket. Plus `AdmissionGuardDown`, measured as "no replica scraped", since a dead guard can't report its own errors; the API server's `apiserver_admission_webhook_rejection_count{error_type="calling_webhook_error"}` is the outside view. Alertmanager routes critical to on-call and inhibits the matching warning. Every alert links to a runbook.
+11. **"Why Terraform *and* Argo CD?"** Terraform installs the platform once (charts, versions, values). Argo CD deploys what changes often (the guard, its alerts, its dashboard) from Git, and self-heals drift. One gotcha I hit in design: cert-manager writes the CA into the webhook config, so Argo CD must ignore that field, or it would keep removing it and break every webhook call.
+
 ## Honest gaps to name
-Service mesh in production, Falco, and MLOps platforms (Kubeflow/MLflow). Also ask: "Defence work may need security vetting. What's the process for someone who isn't an EU citizen?"
+Service mesh in production, Falco, distributed tracing (Tempo/OpenTelemetry), and MLOps platforms (Kubeflow/MLflow). Also ask: "Defence work may need security vetting. What's the process for someone who isn't an EU citizen?"
 
 ## Before the interview
 - [ ] `python3 -m unittest discover -s tests -t . -v`, then explain `evaluate`, `review`, `TLSServer.finish_request` and the `urlsplit` fix without notes

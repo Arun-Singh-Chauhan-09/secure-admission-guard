@@ -1,0 +1,52 @@
+name: platform
+# Terraform + Argo CD + Prometheus/Alertmanager/Grafana around the guard.
+# lint: on every push.  e2e: on pushes that touch the platform, or by hand
+#   (gh workflow run platform.yml).
+on:
+  push:
+    paths: [platform/**, deploy/**, guard/**, Dockerfile, .github/workflows/platform.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: terraform fmt + validate
+        run: |
+          TF="docker run --rm -v $PWD:/work -w /work/platform/terraform hashicorp/terraform:1.9.8"
+          $TF fmt -check -recursive
+          $TF init -backend=false -input=false
+          $TF validate
+      - name: alert rules (promtool check + unit tests)
+        run: |
+          pip install pyyaml
+          python3 platform/tests/extract_rules.py deploy/observability/prometheusrule.yaml platform/tests/.rules.yml
+          PROMTOOL="docker run --rm -v $PWD:/w -w /w --entrypoint promtool prom/prometheus:v2.55.1"
+          $PROMTOOL check rules platform/tests/.rules.yml
+          $PROMTOOL test rules platform/tests/rules_test.yml
+      - name: kustomize overlays build
+        run: |
+          kubectl kustomize deploy/fixed >/dev/null
+          kubectl kustomize platform/gitops/guard | grep -q "argocd"
+      - name: dashboard JSON parses
+        run: python3 -c "import yaml,json;json.loads(yaml.safe_load(open('deploy/observability/grafana-dashboard.yaml'))['data']['admission-guard.json'])"
+
+  e2e:
+    needs: lint
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+        with: { install_only: true }
+      - name: platform drill (Terraform -> Argo CD -> guard; alert reaches Alertmanager)
+        env:
+          TARGET_REVISION: ${{ github.sha }}   # Argo CD deploys exactly this commit
+        run: bash platform/up.sh
+      - name: results
+        if: always()
+        run: cat platform/results.txt || true

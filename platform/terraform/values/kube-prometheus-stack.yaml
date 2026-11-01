@@ -1,0 +1,65 @@
+fullnameOverride: kps
+
+# Pick up PodMonitors / PrometheusRules from every namespace, not only ones labelled
+# with this Helm release (the guard's live in Git, deployed by Argo CD).
+prometheus:
+  prometheusSpec:
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    retention: 2d
+    resources:
+      requests: { cpu: 100m, memory: 400Mi }
+
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: "null"
+      group_by: [alertname, namespace]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - receiver: "null"
+          matchers: ['alertname = "Watchdog"']
+        - receiver: oncall
+          matchers: ['severity = "critical"']
+        - receiver: ticket
+          matchers: ['severity = "warning"']
+    # A critical alert silences the matching warning, so on-call gets one page, not two.
+    inhibit_rules:
+      - source_matchers: ['severity = "critical"']
+        target_matchers: ['severity = "warning"']
+        equal: [namespace]
+    # Receivers without integrations here. In production: oncall -> PagerDuty/Opsgenie,
+    # ticket -> the team's issue tracker or chat channel.
+    receivers:
+      - name: "null"
+      - name: oncall
+      - name: ticket
+
+grafana:
+  fullnameOverride: kps-grafana
+  adminPassword: admission-guard-demo   # local kind demo only
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+
+# kind runs these on localhost inside the control-plane node, so Prometheus can't scrape
+# them; turning them off avoids permanently firing "target down" alerts in the demo.
+kubeControllerManager: { enabled: false }
+kubeScheduler: { enabled: false }
+kubeEtcd: { enabled: false }
+kubeProxy: { enabled: false }
+defaultRules:
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeProxy: false

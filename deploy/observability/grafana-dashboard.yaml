@@ -1,0 +1,63 @@
+# Grafana's dashboard sidecar picks up every ConfigMap labelled grafana_dashboard="1".
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: admission-guard-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: '1'
+data:
+  admission-guard.json: "{\n  \"title\": \"Admission Guard\",\n  \"uid\": \"admission-guard\",\n  \"tags\": [\n    \"admission-guard\",\n    \"slo\"\n  ],\n  \"timezone\": \"browser\",\n  \"schemaVersion\"\
+    : 39,\n  \"refresh\": \"30s\",\n  \"time\": {\n    \"from\": \"now-1h\",\n    \"to\": \"now\"\n  },\n  \"panels\": [\n    {\n      \"id\": 1,\n      \"type\": \"stat\",\n      \"title\": \"Replicas\
+    \ up\",\n      \"description\": \"0 = outage (failurePolicy Fail); 1 = one failure away from an outage.\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\
+    \n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 0,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\"\
+    ,\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n            \"steps\": [\n              {\n                \"color\": \"red\",\n                \"value\": null\n              },\n\
+    \              {\n                \"color\": \"orange\",\n                \"value\": 1\n              },\n              {\n                \"color\": \"green\",\n                \"value\": 2\n     \
+    \         }\n            ]\n          }\n        },\n        \"overrides\": []\n      },\n      \"options\": {\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\n  \
+    \        ]\n        },\n        \"colorMode\": \"background\"\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\"\
+    ,\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum(up{namespace=\\\"admission-guard\\\"}) or vector(0)\"\n        }\n      ]\n    },\n    {\n      \"id\": 2,\n      \"type\"\
+    : \"stat\",\n      \"title\": \"Webhook call success (1h)\",\n      \"description\": \"SLI: API server calls that got an answer (allowed or denied). SLO 99.9 %.\",\n      \"datasource\": {\n       \
+    \ \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 6,\n        \"y\": 0,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"fieldConfig\"\
+    : {\n        \"defaults\": {\n          \"unit\": \"percentunit\",\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n            \"steps\": [\n              {\n                \"color\"\
+    : \"red\",\n                \"value\": null\n              },\n              {\n                \"color\": \"orange\",\n                \"value\": 0.99\n              },\n              {\n         \
+    \       \"color\": \"green\",\n                \"value\": 0.999\n              }\n            ]\n          }\n        },\n        \"overrides\": []\n      },\n      \"options\": {\n        \"reduceOptions\"\
+    : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n        },\n        \"colorMode\": \"background\"\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n   \
+    \       \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"1 - (admission_guard:webhook_call_errors:ratio_rate1h or vector(0))\"\
+    \n        }\n      ]\n    },\n    {\n      \"id\": 3,\n      \"type\": \"stat\",\n      \"title\": \"Error budget burn rate (1h)\",\n      \"description\": \"1 = spending the 30-day budget exactly on\
+    \ schedule. 14.4 pages, 6 opens a ticket.\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n      \
+    \  \"y\": 0,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\",\n          \"thresholds\": {\n            \"mode\": \"\
+    absolute\",\n            \"steps\": [\n              {\n                \"color\": \"green\",\n                \"value\": null\n              },\n              {\n                \"color\": \"orange\"\
+    ,\n                \"value\": 6\n              },\n              {\n                \"color\": \"red\",\n                \"value\": 14.4\n              }\n            ]\n          }\n        },\n  \
+    \      \"overrides\": []\n      },\n      \"options\": {\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n        },\n        \"colorMode\": \"background\"\
+    \n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n    \
+    \      \"expr\": \"(admission_guard:webhook_call_errors:ratio_rate1h or vector(0)) / 0.001\"\n        }\n      ]\n    },\n    {\n      \"id\": 4,\n      \"type\": \"stat\",\n      \"title\": \"Avg decision\
+    \ time (5m)\",\n      \"description\": \"\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 18,\n      \
+    \  \"y\": 0,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"s\",\n          \"thresholds\": {\n            \"mode\": \"absolute\"\
+    ,\n            \"steps\": [\n              {\n                \"color\": \"green\",\n                \"value\": null\n              },\n              {\n                \"color\": \"orange\",\n    \
+    \            \"value\": 0.1\n              },\n              {\n                \"color\": \"red\",\n                \"value\": 1\n              }\n            ]\n          }\n        },\n        \"\
+    overrides\": []\n      },\n      \"options\": {\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n        },\n        \"colorMode\": \"background\"\n \
+    \     },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n      \
+    \    \"expr\": \"admission_guard:latency_seconds:avg_rate5m\"\n        }\n      ]\n    },\n    {\n      \"id\": 5,\n      \"type\": \"timeseries\",\n      \"title\": \"Decisions per second by result\"\
+    ,\n      \"description\": \"denied = policy working. error = bad requests reaching the guard.\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n\
+    \      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 4,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\"\n      \
+    \  },\n        \"overrides\": []\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"\
+    prometheus\"\n          },\n          \"expr\": \"sum by (result) (rate(admission_guard_decisions_total[5m]))\",\n          \"legendFormat\": \"{{result}}\"\n        }\n      ]\n    },\n    {\n    \
+    \  \"id\": 6,\n      \"type\": \"timeseries\",\n      \"title\": \"API server -> webhook calls\",\n      \"description\": \"Seen from the API server: the only view that still works when the guard is\
+    \ down.\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 4,\n        \"w\": 12,\n \
+    \       \"h\": 8\n      },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\"\n        },\n        \"overrides\": []\n      },\n      \"targets\": [\n        {\n     \
+    \     \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum by (rejected) (rate(apiserver_admission_webhook_request_total{name=\\\
+    \"pods.admission-guard.io\\\"}[5m]))\",\n          \"legendFormat\": \"rejected={{rejected}}\"\n        },\n        {\n          \"refId\": \"B\",\n          \"datasource\": {\n            \"type\"\
+    : \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum(rate(apiserver_admission_webhook_rejection_count{name=\\\"pods.admission-guard.io\\\",error_type=\\\"\
+    calling_webhook_error\\\"}[5m]))\",\n          \"legendFormat\": \"call errors (guard unreachable)\"\n        }\n      ]\n    },\n    {\n      \"id\": 7,\n      \"type\": \"timeseries\",\n      \"title\"\
+    : \"Webhook call error ratio vs SLO\",\n      \"description\": \"\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n  \
+    \      \"x\": 0,\n        \"y\": 12,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"percentunit\"\n        },\n        \"overrides\"\
+    : []\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n\
+    \          \"expr\": \"admission_guard:webhook_call_errors:ratio_rate5m\",\n          \"legendFormat\": \"5m\"\n        },\n        {\n          \"refId\": \"B\",\n          \"datasource\": {\n    \
+    \        \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"admission_guard:webhook_call_errors:ratio_rate1h\",\n          \"legendFormat\": \"1h\"\n\
+    \        },\n        {\n          \"refId\": \"C\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"vector(0.001)\"\
+    ,\n          \"legendFormat\": \"SLO budget (0.1 %)\"\n        }\n      ]\n    },\n    {\n      \"id\": 8,\n      \"type\": \"timeseries\",\n      \"title\": \"Serving certificate: days left\",\n  \
+    \    \"description\": \"cert-manager renews 10 days before expiry; the guard reloads it without a restart.\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\
+    \n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 12,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"d\"\
+    \n        },\n        \"overrides\": []\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\"\
+    : \"prometheus\"\n          },\n          \"expr\": \"(certmanager_certificate_expiration_timestamp_seconds{namespace=\\\"admission-guard\\\"} - time()) / 86400\",\n          \"legendFormat\": \"{{name}}\"\
+    \n        }\n      ]\n    }\n  ]\n}"

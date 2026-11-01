@@ -1,0 +1,17 @@
+# What Argo CD deploys on the platform cluster: deploy/fixed, plus the platform's own
+# namespaces in the exemption list. Their images (Prometheus, Grafana, Argo CD) come from
+# public registries; in production they'd be mirrored into registry.internal and pinned by
+# digest, and these two exemptions would go away.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../deploy/fixed
+patches:
+  - target:
+      group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: admission-guard
+    patch: |-
+      - op: replace
+        path: /webhooks/0/namespaceSelector/matchExpressions/0/values
+        value: [kube-system, admission-guard, cert-manager, monitoring, argocd]

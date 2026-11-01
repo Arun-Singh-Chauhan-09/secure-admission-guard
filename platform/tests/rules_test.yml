@@ -1,0 +1,75 @@
+# promtool unit tests for the alert rules: prove each alert fires when it should and
+# stays quiet when it shouldn't.  CI: promtool test rules platform/tests/rules_test.yml
+rule_files: [.rules.yml]
+evaluation_interval: 30s
+
+tests:
+  # Both replicas go down: page after 1 minute.
+  - interval: 30s
+    input_series:
+      - series: 'up{namespace="admission-guard", instance="a"}'
+        values: '1 1 0 0 0 0 0 0 0 0'
+      - series: 'up{namespace="admission-guard", instance="b"}'
+        values: '1 1 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: AdmissionGuardDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: AdmissionGuardDown
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: No admission-guard replica is up.
+              description: failurePolicy is Fail, so every pod create outside the exempt namespaces is being rejected.
+              runbook_url: https://github.com/Arun-Singh-Chauhan-09/secure-admission-guard/blob/main/docs/runbook.md#admissionguarddown
+
+  # One replica down for 5+ minutes: warning, not a page.
+  - interval: 1m
+    input_series:
+      - series: 'up{namespace="admission-guard", instance="a"}'
+        values: '1+0x10'
+      - series: 'up{namespace="admission-guard", instance="b"}'
+        values: '0+0x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AdmissionGuardDegraded
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: AdmissionGuardDown
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: AdmissionGuardDegraded
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: Only 1 admission-guard replica(s) up; one more failure is an outage.
+              runbook_url: https://github.com/Arun-Singh-Chauhan-09/secure-admission-guard/blob/main/docs/runbook.md#admissionguarddegraded
+
+  # 10 % of webhook calls failing (budget is 0.1 %): fast burn pages.
+  - interval: 1m
+    input_series:
+      - series: 'apiserver_admission_webhook_request_total{name="pods.admission-guard.io"}'
+        values: '0+100x70'
+      - series: 'apiserver_admission_webhook_rejection_count{name="pods.admission-guard.io", error_type="calling_webhook_error"}'
+        values: '0+10x70'
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: AdmissionGuardErrorBudgetBurnFast
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: Webhook calls failing fast enough to burn the 30-day error budget in ~2 days.
+              runbook_url: https://github.com/Arun-Singh-Chauhan-09/secure-admission-guard/blob/main/docs/runbook.md#errorbudgetburn
+
+  # Healthy traffic, no call errors: no budget alerts.
+  - interval: 1m
+    input_series:
+      - series: 'apiserver_admission_webhook_request_total{name="pods.admission-guard.io"}'
+        values: '0+100x70'
+      - series: 'apiserver_admission_webhook_rejection_count{name="pods.admission-guard.io", error_type="calling_webhook_error"}'
+        values: '0+0x70'
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: AdmissionGuardErrorBudgetBurnFast
+        exp_alerts: []

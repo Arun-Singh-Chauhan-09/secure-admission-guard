@@ -91,6 +91,41 @@ I reviewed my own manifests the way a security team would, and fixed three gaps:
 
 Also: a `.dockerignore` that sends only `guard/` to the build, and a comment that the kind image `admission-guard:dev` is `registry.internal/admission-guard@sha256:...` in production.
 
+## The platform around it: Terraform, Argo CD, Prometheus, Alertmanager, Grafana
+
+A guard nobody watches is a guard that fails quietly. `platform/` puts it on a small
+platform and proves, end to end, that the pieces work together.
+
+```
+Terraform (helm provider)
+  ├─ kube-prometheus-stack ── Prometheus · Alertmanager · Grafana
+  ├─ cert-manager ─────────── serving cert + expiry metrics
+  ├─ Argo CD
+  └─ Argo CD Applications ──► Git (this repo)
+        ├─ platform/gitops/guard   = deploy/fixed + platform exemptions (Kustomize)
+        └─ deploy/observability    = PodMonitor · PrometheusRule (SLO) · Grafana dashboard
+```
+
+| Piece | What it does |
+|---|---|
+| **SLO** | SLI = share of API server → webhook calls that got an answer (allow *or* deny). Target 99.9 % / 30 days |
+| **Burn-rate alerts** | Fast burn (14.4×, 1 h and 5 m windows) pages; slow burn (6×, 6 h and 30 m) is a ticket |
+| **Other alerts** | `AdmissionGuardDown` (critical) · `Degraded` (one replica left) · `Slow` · `CertExpiringSoon`. Each links to [docs/runbook.md](docs/runbook.md) |
+| **Alertmanager** | critical → `oncall`, warning → `ticket`; a critical alert inhibits its warning, so one page, not two |
+| **Grafana** | "Admission Guard" dashboard, provisioned from a ConfigMap in Git: replicas, SLI, burn rate, decisions, API-server view of webhook calls, cert days left |
+| **GitOps** | Argo CD with self-heal: a manual `kubectl scale` is reverted. cert-manager's injected CA is in `ignoreDifferences`, or Argo CD would keep deleting it |
+| **Tests** | `promtool test rules`: each alert fires when it should and stays quiet when it shouldn't |
+
+`./platform/up.sh` (about 10 minutes on kind) checks six things and writes `platform/results.txt`:
+1. the guard (deployed by Argo CD) denies a bad pod;
+2. Prometheus scrapes both replicas;
+3. the rules and dashboard are loaded;
+4. a manual scale-down is reverted by Argo CD;
+5. with GitOps paused and the guard at 0, **`AdmissionGuardDown` reaches Alertmanager**;
+6. GitOps resumed, the guard is restored.
+
+CI: the `platform` workflow runs `terraform fmt/validate`, promtool, the Kustomize builds, and on `main` the full drill with Argo CD deploying the exact commit.
+
 ## Run it
 
 ```bash
@@ -111,6 +146,9 @@ kubectl run x --image=nginx --dry-run=server   # see the full list of violations
 | `deploy/fixed`, `deploy/broken` | The safe config (incl. NetworkPolicy and PriorityClass) and the outage config |
 | `tools/` | Webhook config checker + tests |
 | `drill/run-drill.sh` | kind reproduction |
+| `platform/` | Terraform, Argo CD apps, promtool tests, `up.sh` / `down.sh` |
+| `deploy/observability/` | PodMonitor, SLO PrometheusRule, Grafana dashboard |
+| `docs/runbook.md` | What to do for each alert |
 
 ## What was run here
 

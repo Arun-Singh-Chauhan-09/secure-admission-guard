@@ -1,0 +1,5 @@
+# Lets Argo CD (platform/) layer environment overlays on top; the drill uses `kubectl apply -k`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - admission-guard.yaml
