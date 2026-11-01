@@ -6,3 +6,4 @@ platform/.kubeconfig-internal
 platform/terraform/.terraform/
 platform/terraform/terraform.tfstate*
 platform/tests/.rules.yml
+platform/.ui-pids

@@ -124,6 +124,8 @@ Terraform (helm provider)
 5. with GitOps paused and the guard at 0, **`AdmissionGuardDown` reaches Alertmanager**;
 6. GitOps resumed, the guard is restored.
 
+Then `bash platform/ui.sh` opens Grafana, Argo CD, Prometheus and Alertmanager in the browser (port-forwards in the background, logins printed). Live demos: `bash platform/ui.sh selfheal` (Argo CD undoes a manual scale-down) and `bash platform/ui.sh page` (guard down → page in Alertmanager → GitOps restores it). `bash platform/ui.sh stop` ends the port-forwards.
+
 CI: the `platform` workflow runs `terraform fmt/validate`, promtool, the Kustomize builds, and on `main` the full drill with Argo CD deploying the exact commit.
 
 ## Run it
