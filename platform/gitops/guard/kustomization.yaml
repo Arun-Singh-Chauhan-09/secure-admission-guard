@@ -1,7 +1,12 @@
 # What Argo CD deploys on the platform cluster: deploy/fixed, plus the platform's own
-# namespaces in the exemption list. Their images (Prometheus, Grafana, Argo CD) come from
-# public registries; in production they'd be mirrored into registry.internal and pinned by
-# digest, and these two exemptions would go away.
+# namespaces in the exemption list. Their images (Prometheus, Grafana, Argo CD, kind's
+# local-path storage helper) come from public registries; in production they'd be mirrored
+# into registry.internal and pinned by digest, and these exemptions would go away.
+#
+# local-path-storage: the provisioner creates a short-lived helper pod (busybox) to create
+# each volume. Without this exemption the guard denies that pod and every new PVC hangs
+# in Pending. Found when Loki's PVC never bound on a cluster where the guard was
+# already running; CI missed it because there Loki is installed before the guard.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -14,4 +19,4 @@ patches:
     patch: |-
       - op: replace
         path: /webhooks/0/namespaceSelector/matchExpressions/0/values
-        value: [kube-system, admission-guard, cert-manager, monitoring, argocd]
+        value: [kube-system, admission-guard, cert-manager, monitoring, argocd, local-path-storage]

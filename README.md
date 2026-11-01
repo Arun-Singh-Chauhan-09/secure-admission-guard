@@ -130,6 +130,16 @@ Then `bash platform/ui.sh` opens Grafana, Argo CD, Prometheus and Alertmanager i
 
 CI: the `platform` workflow runs `terraform fmt/validate`, promtool, the Kustomize builds, and on `main` the full drill with Argo CD deploying the exact commit.
 
+## A fourth, real incident: the guard blocked the storage provisioner
+
+Adding Loki to a platform where the guard was **already running**, Terraform timed out after 10 minutes: `loki-0` stayed `Pending` with `VolumeBinding: context deadline exceeded`. Memory was fine.
+
+**Cause.** kind's local-path provisioner creates each volume with a short-lived **helper pod** (busybox) in `local-path-storage`. That namespace wasn't exempt, so the guard denied the helper pod, and every new PVC hung. A fail-closed control had quietly broken a platform function nobody thinks of as "a workload".
+
+**Why CI missed it.** In CI the order is fresh: Loki gets its volume *before* Argo CD deploys the guard. Only an upgrade of a running platform hit it.
+
+**Fix.** `local-path-storage` added to the platform exemptions (with the reason in the overlay), and `up.sh` now creates a probe PVC *after* the guard is up and fails unless it binds. The lesson: test the upgrade path, not only the fresh install, and list every controller that creates pods on your behalf before you enforce.
+
 ## Run it
 
 ```bash

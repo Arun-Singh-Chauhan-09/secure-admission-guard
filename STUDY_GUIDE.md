@@ -54,6 +54,8 @@
 11. **"Why Terraform *and* Argo CD?"** Terraform installs the platform once (charts, versions, values). Argo CD deploys what changes often (the guard, its alerts, its dashboard) from Git, and self-heals drift. One gotcha I hit in design: cert-manager writes the CA into the webhook config, so Argo CD must ignore that field, or it would keep removing it and break every webhook call.
 12. **"Metrics or logs for this?"** Both, for different questions. Metrics (Prometheus) answer *is it healthy and how fast is the budget burning*: cheap, aggregated, drive alerts. Logs (Loki) answer *who and what*: which namespace, which pod, which rule. The guard logs one JSON line per violation; LogQL `| json` turns it into labels at query time, so I can chart denials by team without adding high-cardinality labels to Prometheus. Alloy (Promtail's successor) ships the logs via the Kubernetes API.
 
+13. **"Has your guard ever broken something?"** Yes: storage. Adding Loki to a running platform, its PVC never bound. kind's local-path provisioner creates volumes with a helper pod, and the guard denied it. CI missed it because on a fresh install Loki's volume is created before the guard exists. Fix: exempt that namespace with a written reason, and a probe PVC in the drill after the guard is up. Lesson: before enforcing, list every controller that creates pods for you (storage provisioners, CNI, CSI, job runners), and test upgrades, not only fresh installs.
+
 ## Honest gaps to name
 Service mesh in production, Falco, distributed tracing (Tempo/OpenTelemetry; Loki is done), and MLOps platforms (Kubeflow/MLflow). Also ask: "Defence work may need security vetting. What's the process for someone who isn't an EU citizen?"
 

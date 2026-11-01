@@ -55,6 +55,26 @@ RESULT=$($K run bad --image=nginx:latest --dry-run=server 2>&1 | tail -1 || true
 log "$RESULT"
 grep -q "denied the request" <<<"$RESULT" || fail "no denial from the webhook"
 
+log "== 1b. new volumes still work with the guard on (local-path helper pods are exempt)"
+$K -n monitoring delete pod/pvc-probe pvc/pvc-probe --ignore-not-found >/dev/null 2>&1
+$K apply -f - >/dev/null <<'PVC'
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: pvc-probe, namespace: monitoring }
+spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 10Mi } } }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: pvc-probe, namespace: monitoring }
+spec:
+  containers: [{ name: p, image: registry.k8s.io/pause:3.10, volumeMounts: [{ name: v, mountPath: /v }] }]
+  volumes: [{ name: v, persistentVolumeClaim: { claimName: pvc-probe } }]
+PVC
+pvc_bound() { [ "$($K -n monitoring get pvc pvc-probe -o jsonpath='{.status.phase}')" = Bound ]; }
+wait_for "probe PVC Bound (is local-path-storage exempt from the guard?)" 120 pvc_bound
+log "probe PVC: Bound"
+$K -n monitoring delete pod/pvc-probe pvc/pvc-probe --wait=false >/dev/null 2>&1
+
 # ---- 2. scraping -------------------------------------------------------------------
 log "== 2. Prometheus scrapes both replicas"
 wait_for "2 replicas up in Prometheus" 300 two_scraped
