@@ -1,0 +1,9 @@
+# Keeps pinned digests and SHAs current: pinning without updates just freezes old CVEs in.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

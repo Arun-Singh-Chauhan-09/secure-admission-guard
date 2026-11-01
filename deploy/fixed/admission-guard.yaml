@@ -12,6 +12,16 @@ metadata:
   namespace: admission-guard
 automountServiceAccountToken: false   # the webhook never calls the Kubernetes API
 ---
+# The guard protects every pod create in the cluster, so it must not be the first thing
+# evicted under memory pressure. Below the built-in system-* classes, above all apps.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: admission-guard-critical
+value: 1000000
+globalDefault: false
+description: Admission webhook that guards the whole cluster; evict last.
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,6 +40,7 @@ spec:
         prometheus.io/port: "8080"
     spec:
       serviceAccountName: admission-guard
+      priorityClassName: admission-guard-critical   # FIX: evicted last when a node runs short
       affinity:
         podAntiAffinity:               # FIX: never both replicas on the node being drained
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -42,6 +53,8 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: guard
+          # kind drill image. In production: registry.internal/admission-guard@sha256:<digest>,
+          # which also passes the guard's own policy.
           image: admission-guard:dev
           imagePullPolicy: IfNotPresent
           args:
@@ -78,6 +91,29 @@ spec:
   minAvailable: 1                      # FIX: a drain may take one replica, never both
   selector:
     matchLabels: { app.kubernetes.io/name: admission-guard }
+---
+# Default deny, then allow only what the guard needs.
+# - 8443 (webhook): the caller is the API server, which is not a pod and can't be picked
+#   by a pod selector, so the port is open to the network; TLS is the control here.
+# - 8080 (/metrics, /healthz): only from the monitoring namespace. Kubelet probes come
+#   from the node itself, which network policy implementations allow.
+# - Egress: none. The guard never calls anything (no API server, no DNS).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: admission-guard
+  namespace: admission-guard
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: admission-guard }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports: [{ protocol: TCP, port: 8443 }]
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }
+      ports: [{ protocol: TCP, port: 8080 }]
+  egress: []
 ---
 apiVersion: v1
 kind: Service

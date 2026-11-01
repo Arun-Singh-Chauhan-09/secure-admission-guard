@@ -10,6 +10,8 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: unit + HTTPS tests (standard library only)
         run: python3 -m unittest discover -s tests -t . -v
+      - name: base image pinned by digest (the rule the guard enforces on everyone else)
+        run: grep -Eq '^FROM [^ ]+@sha256:[0-9a-f]{64}' Dockerfile
       - name: webhook config guard (blocks the outage config)
         run: |
           pip install pyyaml

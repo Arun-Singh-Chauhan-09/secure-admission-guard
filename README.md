@@ -79,6 +79,18 @@ read: connection reset by peer
 
 The lesson: test against the real caller, not your idea of it. A kind cluster found in one run what 16 tests didn't.
 
+## Hardening after a self-review
+
+I reviewed my own manifests the way a security team would, and fixed three gaps:
+
+| Gap | Why it mattered | Fix |
+|---|---|---|
+| `FROM python:3.13-slim` by tag | My webhook rejects any image without a digest, yet my own image was built from a movable tag | Base image pinned by `@sha256:` digest. CI fails on a `FROM` without one, and Dependabot opens a PR when a new digest is published, so pinning doesn't freeze old CVEs in |
+| No NetworkPolicy | Any pod could reach the webhook and its metrics | Default deny. 8443 open for the API server (not a pod, so TLS is the control), 8080 only from the `monitoring` namespace, no egress at all |
+| No PriorityClass | Under memory pressure the guard could be evicted like any app, and every pod create in the cluster depends on it | `admission-guard-critical`: above all apps, below the built-in `system-*` classes |
+
+Also: a `.dockerignore` that sends only `guard/` to the build, and a comment that the kind image `admission-guard:dev` is `registry.internal/admission-guard@sha256:...` in production.
+
 ## Run it
 
 ```bash
@@ -96,7 +108,7 @@ kubectl run x --image=nginx --dry-run=server   # see the full list of violations
 | `guard/webhook.py` | AdmissionReview v1: echoes the UID, 403 with every reason, audit mode with warnings, `ValueError` on garbage (→ 400), thread-safe metrics |
 | `guard/server.py` | HTTPS server: TLS handshake per connection thread with a 5 s timeout, certificate hot reload, separate plain-HTTP port for `/healthz` and `/metrics`, graceful SIGTERM |
 | `tests/` | 17 tests, incl. a real HTTPS call with the API server's `?timeout=` query, certificate rotation without restart, and a stuck client that must not block others |
-| `deploy/fixed`, `deploy/broken` | The safe config and the outage config |
+| `deploy/fixed`, `deploy/broken` | The safe config (incl. NetworkPolicy and PriorityClass) and the outage config |
 | `tools/` | Webhook config checker + tests |
 | `drill/run-drill.sh` | kind reproduction |
 

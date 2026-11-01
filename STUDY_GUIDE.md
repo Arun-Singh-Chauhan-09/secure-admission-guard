@@ -48,6 +48,8 @@
 
 8. **"Tell me about a bug your tests missed."** The kind drill. The API server calls `/validate?timeout=10s`; my handler compared the full path, so every real call was rejected with 400 and the connection was reset. Unit tests and curl used `/validate` without a query, so they passed. Worse, my CI check grepped for "denied", which matched the drill's own heading, so CI was green. Fix: ignore the query string, add a test with the real URL, and make the drill fail unless the webhook returns `denied the request`. Lesson: test against the real caller, and make sure every check can actually fail.
 
+9. **"Is your own image secure?"** I reviewed it like a security team would. My base image was pinned by tag while my webhook demands digests, so I pinned it by digest, made CI fail on an unpinned `FROM`, and added Dependabot so the pin gets updated. I also added a default-deny NetworkPolicy (8443 open because the API server isn't a pod; 8080 only from monitoring; no egress) and a PriorityClass so the guard isn't evicted before the apps it protects.
+
 ## Honest gaps to name
 Service mesh in production, Falco, and MLOps platforms (Kubeflow/MLflow). Also ask: "Defence work may need security vetting. What's the process for someone who isn't an EU citizen?"
 

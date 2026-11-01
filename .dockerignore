@@ -1,0 +1,4 @@
+# Only guard/ is copied into the image; keep everything else out of the build context.
+*
+!guard/
+guard/**/__pycache__
