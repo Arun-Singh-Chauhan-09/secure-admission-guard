@@ -8,9 +8,10 @@
 FROM python:3.13-slim@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN python -m pip uninstall -y pip \
- && rm -rf /usr/local/lib/python3.13/ensurepip
+ && rm -rf /usr/local/lib/python3.*/ensurepip
 WORKDIR /app
-COPY guard ./guard
+# Owned by root and read-only (0555): the app user can run the code but never change it.
+COPY --chmod=0555 guard ./guard
 # Fixed numeric UID so Kubernetes runAsNonRoot can verify it.
 USER 65532:65532
 EXPOSE 8443 8080
