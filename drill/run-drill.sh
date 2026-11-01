@@ -24,6 +24,8 @@ $K -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s >/d
 docker build -q -t admission-guard:dev "$ROOT" >/dev/null && kind load docker-image admission-guard:dev --name $CLUSTER
 
 $K delete validatingwebhookconfiguration admission-guard --ignore-not-found >/dev/null
+# Fresh namespace each run, so events from an earlier run can't show up in this one.
+$K delete namespace admission-guard --ignore-not-found --wait=true >/dev/null
 $K apply -f "$ROOT/deploy/$MODE/" >/dev/null
 $K -n admission-guard rollout status deploy/admission-guard --timeout=180s >/dev/null
 sleep 5   # CA injection
