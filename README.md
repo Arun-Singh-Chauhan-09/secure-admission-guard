@@ -43,7 +43,7 @@ flowchart LR
 
 **Prevention.**
 - `tools/check_webhook_config.py` runs in CI and rejects a fail-closed webhook that misses any of W1–W5. Its tests prove it fails on the outage config, and that a custom "exempt" label doesn't count.
-- The CI `drill` job runs `./drill/run-drill.sh fixed` on kind and requires that CoreDNS restarts after the drain **and** that the bad pod is still denied.
+- The CI `drill` job runs `./drill/run-drill.sh fixed` on kind and requires that CoreDNS restarts after the drain **and** that the webhook returns a real denial (`denied the request`). If the webhook answers with a connection error instead, the drill stops as invalid.
 - Metrics `admission_guard_decisions_total{result}` and `admission_guard_seconds_total`. Alert on errors, and on the API server's `apiserver_admission_webhook_rejection_count{error_type="calling_webhook_error"}`.
 
 ## A second, real incident: the scan gate caught my own image
@@ -59,10 +59,30 @@ This one wasn't staged. On the first push to GitHub:
 | #3 | ✅ | ✅ | ❌ 5 HIGH CVEs in pip's bundled libraries |
 | #4 | ✅ | ✅ | ✅ |
 
+## A third, real incident: my green drill was proving nothing
+
+The first time I ran the drill on my own laptop, step one ("unpinned image is denied") did not show a denial. It showed this:
+
+```
+failed calling webhook "pods.admission-guard.io": Post "https://admission-guard.admission-guard.svc:443/validate?timeout=10s":
+read: connection reset by peer
+```
+
+**Cause.** The API server calls `/validate?timeout=10s`. My handler compared the whole request path, query string included, with `/validate`, so every real call got a 400 before its body was read. The socket was then closed with unread data on it, and the client got a TCP reset. My unit tests and my `curl` checks all used `/validate` with no query, so all of them passed.
+
+**Why CI was still green.** The CI check was `grep -qi "denied"` on the results file, and the drill's own heading line says "...is denied". The check matched the heading, not a denial. A check that cannot fail is not a check.
+
+**Fix.**
+1. Compare `urlsplit(self.path).path`, so the query string is ignored.
+2. New test `test_api_server_query_string_is_accepted` posts to `/validate?timeout=10s` over real TLS. It fails on the old code and passes on the fix.
+3. The drill now stops with `DRILL INVALID` unless the webhook returns `denied the request`, and CI greps for that exact phrase.
+
+The lesson: test against the real caller, not your idea of it. A kind cluster found in one run what 16 tests didn't.
+
 ## Run it
 
 ```bash
-python3 -m unittest discover -s tests -t . -v   # 16 tests, incl. real HTTPS
+python3 -m unittest discover -s tests -t . -v   # 17 tests, incl. real HTTPS
 (cd tools && python3 -m unittest -v)            # 4 tests
 ./drill/run-drill.sh fixed
 kubectl run x --image=nginx --dry-run=server   # see the full list of violations
@@ -75,16 +95,16 @@ kubectl run x --image=nginx --dry-run=server   # see the full list of violations
 | `guard/policy.py` | Pure policy functions: registry prefix (incl. look-alike domains), digest, init/ephemeral containers, privileged, host access, capabilities, non-root |
 | `guard/webhook.py` | AdmissionReview v1: echoes the UID, 403 with every reason, audit mode with warnings, `ValueError` on garbage (→ 400), thread-safe metrics |
 | `guard/server.py` | HTTPS server: TLS handshake per connection thread with a 5 s timeout, certificate hot reload, separate plain-HTTP port for `/healthz` and `/metrics`, graceful SIGTERM |
-| `tests/` | 16 tests, incl. a real HTTPS call, certificate rotation without restart, and a stuck client that must not block others |
+| `tests/` | 17 tests, incl. a real HTTPS call with the API server's `?timeout=` query, certificate rotation without restart, and a stuck client that must not block others |
 | `deploy/fixed`, `deploy/broken` | The safe config and the outage config |
 | `tools/` | Webhook config checker + tests |
 | `drill/run-drill.sh` | kind reproduction |
 
 ## What was run here
 
-- **Ran:** 16 Python tests and 4 checker tests. The server process over real TLS: a bad pod denied with 403, bad input answered with 400, `/metrics` and `/healthz` working, and a clean exit 0.56 s after SIGTERM.
-- **In GitHub Actions:** the kind drill (`fixed`) passes on every push: node drained, guard recovers, CoreDNS restarts, bad pod still denied. Trivy image scan clean.
-- **Still to do by hand:** run `./drill/run-drill.sh broken` in WSL to watch the outage itself, and commit `drill/results-*.txt`.
+- **Ran:** 17 Python tests and 4 checker tests. The server process over real TLS: a bad pod denied with 403, bad input answered with 400, `/metrics` and `/healthz` working, and a clean exit 0.56 s after SIGTERM.
+- **On kind (WSL):** the drill, after the fix above. Results in `drill/results-broken.txt` and `drill/results-fixed.txt`.
+- **In GitHub Actions:** the kind drill (`fixed`) on every push, now requiring a real denial. Trivy image scan clean.
 
 ## Where this would go next
 Signature verification of images (cosign / Sigstore policy-controller), Gatekeeper or Kyverno for policies owned by security teams, and Falco for runtime detection.

@@ -46,10 +46,12 @@
 
 7. **"Tell me about a time a security control blocked you."** My own CI, on day one: the Trivy action couldn't start because one of *its* dependencies was pulled by a tag that had been removed, so I learned that pinning must be transitive. Then the scan blocked my image on 5 HIGH CVEs inside pip's bundled libraries. My service never uses pip, so I removed pip from the runtime image instead of writing exceptions. Fix the cause, don't silence the alarm.
 
+8. **"Tell me about a bug your tests missed."** The kind drill. The API server calls `/validate?timeout=10s`; my handler compared the full path, so every real call was rejected with 400 and the connection was reset. Unit tests and curl used `/validate` without a query, so they passed. Worse, my CI check grepped for "denied", which matched the drill's own heading, so CI was green. Fix: ignore the query string, add a test with the real URL, and make the drill fail unless the webhook returns `denied the request`. Lesson: test against the real caller, and make sure every check can actually fail.
+
 ## Honest gaps to name
 Service mesh in production, Falco, and MLOps platforms (Kubeflow/MLflow). Also ask: "Defence work may need security vetting. What's the process for someone who isn't an EU citizen?"
 
 ## Before the interview
-- [ ] `python3 -m unittest discover -s tests -t . -v`, then explain `evaluate`, `review` and `TLSServer.finish_request` without notes
+- [ ] `python3 -m unittest discover -s tests -t . -v`, then explain `evaluate`, `review`, `TLSServer.finish_request` and the `urlsplit` fix without notes
 - [ ] `./drill/run-drill.sh broken` and `fixed` in WSL, and commit the results
 - [ ] Push to GitHub and get CI green (the kind drill runs there)

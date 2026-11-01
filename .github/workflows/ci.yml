@@ -27,7 +27,7 @@ jobs:
         run: |
           ./drill/run-drill.sh fixed
           grep -q "CoreDNS restarted: OK" drill/results-fixed.txt
-          grep -qi "denied" drill/results-fixed.txt
+          grep -q "denied the request" drill/results-fixed.txt
 
   scan:
     needs: test

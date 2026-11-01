@@ -83,9 +83,9 @@ class HttpsTests(unittest.TestCase):
         self.srv.server_close()
         self.dir.cleanup()
 
-    def post(self):
+    def post(self, query=""):
         ctx = ssl.create_default_context(cafile=self.cert)
-        req = urllib.request.Request(self.url, data=body(), headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(self.url + query, data=body(), headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
             return json.loads(resp.read()), resp
 
@@ -99,6 +99,12 @@ class HttpsTests(unittest.TestCase):
     def test_denied_over_tls(self):
         out, _ = self.post()
         self.assertFalse(out["response"]["allowed"])
+
+    def test_api_server_query_string_is_accepted(self):
+        # The real API server calls /validate?timeout=10s. The first kind drill failed on this.
+        out, _ = self.post("?timeout=10s")
+        self.assertFalse(out["response"]["allowed"])
+        self.assertEqual(out["response"]["uid"], "abc-123")
 
     def test_stuck_client_does_not_block_others(self):
         import socket

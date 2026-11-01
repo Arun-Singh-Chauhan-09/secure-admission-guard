@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 from guard.policy import Config
 from guard.webhook import MAX_BODY, Metrics, review
@@ -98,7 +99,8 @@ def make_handlers(cfg, enforce, metrics):
 
         def do_POST(self):
             start = time.perf_counter()
-            if self.path != "/validate" or not self.headers.get("Content-Type", "").startswith("application/json"):
+            # The API server calls /validate?timeout=10s, so compare the path without the query.
+            if urlsplit(self.path).path != "/validate" or not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._send(400, b"expected POST /validate application/json", "text/plain")
             length = int(self.headers.get("Content-Length") or 0)
             if length > MAX_BODY:
@@ -117,9 +119,10 @@ def make_handlers(cfg, enforce, metrics):
             pass
 
         def do_GET(self):
-            if self.path == "/healthz":
+            path = urlsplit(self.path).path
+            if path == "/healthz":
                 body, ctype = b"ok", "text/plain"
-            elif self.path == "/metrics":
+            elif path == "/metrics":
                 body, ctype = metrics.render().encode(), "text/plain; version=0.0.4"
             else:
                 self.send_error(404)

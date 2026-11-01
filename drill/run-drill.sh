@@ -29,7 +29,13 @@ $K -n admission-guard rollout status deploy/admission-guard --timeout=180s >/dev
 sleep 5   # CA injection
 
 log "== [$MODE] policy works: unpinned public image is denied"
-$K run bad --image=nginx:latest --dry-run=server 2>&1 | tail -1 | tee -a "$OUT"
+RESULT=$($K run bad --image=nginx:latest --dry-run=server 2>&1 | tail -1)
+log "$RESULT"
+# The webhook must answer with a real denial. A connection error here means the guard
+# itself is broken, and the rest of the drill would prove nothing.
+if ! grep -q "denied the request" <<<"$RESULT"; then
+  log "DRILL INVALID: the webhook did not return a denial"; exit 1
+fi
 
 log "== [$MODE] drain the node running a guard replica (routine OS patching)"
 NODE=$($K -n admission-guard get pod -l app.kubernetes.io/name=admission-guard -o jsonpath='{.items[0].spec.nodeName}')
