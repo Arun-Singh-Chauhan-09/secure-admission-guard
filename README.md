@@ -46,6 +46,19 @@ flowchart LR
 - The CI `drill` job runs `./drill/run-drill.sh fixed` on kind and requires that CoreDNS restarts after the drain **and** that the bad pod is still denied.
 - Metrics `admission_guard_decisions_total{result}` and `admission_guard_seconds_total`. Alert on errors, and on the API server's `apiserver_admission_webhook_rejection_count{error_type="calling_webhook_error"}`.
 
+## A second, real incident: the scan gate caught my own image
+
+This one wasn't staged. On the first push to GitHub:
+
+1. **The `scan` job failed before it started:** `Unable to resolve action aquasecurity/setup-trivy@v0.2.2`. I had pinned `trivy-action` to a commit (v0.29.0), but **that action pulled its own dependency by tag**, and the tag no longer existed. Pinning only protects you if everything you call is pinned too. Fix: `trivy-action` v0.36.0, which pins `setup-trivy` by commit SHA.
+2. **Then the scan did its job and blocked the build:** **5 HIGH CVEs** in libraries bundled inside **pip** (e.g. `msgpack`). The OS layer (Debian 13.7) was clean. The webhook uses only the standard library and never runs pip, so instead of adding exceptions I **removed pip (and `ensurepip`) from the runtime image**. Result: scan clean, smaller image, less to attack.
+
+| Run | test | drill (kind) | scan |
+|---|---|---|---|
+| #2 | ✅ | ✅ | ❌ action dependency missing |
+| #3 | ✅ | ✅ | ❌ 5 HIGH CVEs in pip's bundled libraries |
+| #4 | ✅ | ✅ | ✅ |
+
 ## Run it
 
 ```bash
@@ -70,7 +83,8 @@ kubectl run x --image=nginx --dry-run=server   # see the full list of violations
 ## What was run here
 
 - **Ran:** 16 Python tests and 4 checker tests. The server process over real TLS: a bad pod denied with 403, bad input answered with 400, `/metrics` and `/healthz` working, and a clean exit 0.56 s after SIGTERM.
-- **Not run here:** the kind drill (no Docker daemon in this environment). Run it in WSL and commit `drill/results-*.txt`. CI also runs the `fixed` drill.
+- **In GitHub Actions:** the kind drill (`fixed`) passes on every push: node drained, guard recovers, CoreDNS restarts, bad pod still denied. Trivy image scan clean.
+- **Still to do by hand:** run `./drill/run-drill.sh broken` in WSL to watch the outage itself, and commit `drill/results-*.txt`.
 
 ## Where this would go next
 Signature verification of images (cosign / Sigstore policy-controller), Gatekeeper or Kyverno for policies owned by security teams, and Falco for runtime detection.

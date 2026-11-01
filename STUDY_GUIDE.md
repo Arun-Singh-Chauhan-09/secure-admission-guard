@@ -44,6 +44,8 @@
 5. **"Supply-chain controls end to end?"** CI build → SBOM → scan (Trivy) → sign (cosign) → push by digest to an internal registry → admission checks registry, digest and signature → Falco at runtime.
 6. **"Why threads and not asyncio?"** Each request is short and CPU-light. Threads with the standard-library server keep the code small and readable. Handshake timeouts matter more than raw concurrency here.
 
+7. **"Tell me about a time a security control blocked you."** My own CI, on day one: the Trivy action couldn't start because one of *its* dependencies was pulled by a tag that had been removed, so I learned that pinning must be transitive. Then the scan blocked my image on 5 HIGH CVEs inside pip's bundled libraries. My service never uses pip, so I removed pip from the runtime image instead of writing exceptions. Fix the cause, don't silence the alarm.
+
 ## Honest gaps to name
 Service mesh in production, Falco, and MLOps platforms (Kubeflow/MLflow). Also ask: "Defence work may need security vetting. What's the process for someone who isn't an EU citizen?"
 
