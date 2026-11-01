@@ -7,3 +7,4 @@ platform/terraform/.terraform/
 platform/terraform/terraform.tfstate*
 platform/tests/.rules.yml
 platform/.ui-pids
+platform/terraform/.terraform.tfstate.lock.info
