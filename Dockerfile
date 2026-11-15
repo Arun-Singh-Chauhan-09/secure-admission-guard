@@ -5,7 +5,7 @@
 # The base image is pinned by digest, the same rule this webhook enforces on everyone
 # else: a tag like 3.13-slim can be moved, a digest cannot. Dependabot opens a PR when a
 # new digest is published, and CI rejects a FROM line without one.
-FROM python:3.15-slim@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN python -m pip uninstall -y pip \
  && rm -rf /usr/local/lib/python3.*/ensurepip
